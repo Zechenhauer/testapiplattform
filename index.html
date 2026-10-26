@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1. Bundesliga Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #070d1a;
+            --card-bg: #0f1115;
+            --accent-color: #00ff87;
+            --text-main: #ffffff;
+            --text-muted: #8b949e;
+            --border-color: #30363d;
+            --live-red: #ff3333;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 25px; }
+        h1 { font-size: 2.2rem; color: var(--accent-color); margin-bottom: 5px; }
+        .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+        
+        .status-box { background: #161b22; border: 1px solid var(--accent-color); padding: 10px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; }
+        
+        .controls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 25px; background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); }
+        button, select { background: #21262d; color: var(--text-main); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; }
+        button:hover, select:hover { background: #30363d; }
+        select { padding-right: 30px; }
+
+        .grid { display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 20px; }
+        @media(max-width: 950px) { .grid { grid-template-columns: 1fr; } }
+        
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        h2 { font-size: 1.2rem; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; color: var(--accent-color); }
+        
+        .match-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; border-radius: 6px; }
+        .match-item:hover { background: #161b22; }
+        
+        .team { display: flex; align-items: center; gap: 10px; width: 38%; }
+        .team.home { justify-content: flex-end; text-align: right; }
+        .team img { width: 24px; height: 24px; object-fit: contain; }
+        .score-box { text-align: center; width: 24%; }
+        .score { font-weight: bold; background: #21262d; padding: 4px 12px; border-radius: 6px; display: inline-block; min-width: 60px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+        th, td { padding: 9px 6px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-muted); font-weight: 600; }
+        td.center, th.center { text-align: center; }
+        td.right, th.right { text-align: right; }
+        .table-team { display: flex; align-items: center; gap: 8px; }
+        .table-team img { width: 20px; height: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>1. Bundesliga Dashboard</h1>
+            <div class="subtitle">Live-Ticker & Tabellen</div>
+        </header>
+
+        <div id="apiStatusBanner" class="status-box">
+            <span>Verbinde mit API...</span>
+        </div>
+
+        <div class="grid">
+            <div>
+                <div class="card">
+                    <h2>Aktuelle Spiele / Live</h2>
+                    <div id="matchesList">Lade Begegnungen...</div>
+                </div>
+            </div>
+            <div>
+                <div class="card">
+                    <h2>Tabelle</h2>
+                    <div id="tableContainer">Lade Tabelle...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = "297322363f3bf16e1304cfb933a0c8d5";
+        const leagueId = 78; // 1. Bundesliga
+        const season = "2026";
+
+        async function init() {
+            await checkApiStatus();
+            loadLiveMatches();
+            loadTable();
+        }
+
+        async function checkApiStatus() {
+            const banner = document.getElementById("apiStatusBanner");
+            try {
+                const res = await fetch("https://v3.football.api-sports.io/status", {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                if(data.response && data.response.account) {
+                    const acc = data.response.account;
+                    banner.innerHTML = `<span>🟢 Verbunden (${acc.firstname})</span><span>Anfragen heute: <b>${data.response.requests.current} / ${data.response.requests.limit_day}</b></span>`;
+                }
+            } catch(e) {
+                banner.innerHTML = `<span style="color:#ff3333;">❌ CORS-Fehler (Bitte über lokalen Server öffnen)</span>`;
+            }
+        }
+
+        async function loadLiveMatches() {
+            const container = document.getElementById("matchesList");
+            try {
+                // Lädt Spiele für die aktuelle Runde / Live
+                const res = await fetch(`https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=${season}&live=all`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                
+                if(data.response && data.response.length > 0) {
+                    container.innerHTML = "";
+                    data.response.forEach(m => {
+                        const home = m.teams.home;
+                        const away = m.teams.away;
+                        container.innerHTML += `
+                            <div class="match-item">
+                                <div class="team home"><span>${home.name}</span><img src="${home.logo}"></div>
+                                <div class="score-box"><div class="score">${m.goals.home ?? 0} : ${m.goals.away ?? 0}</div></div>
+                                <div class="team"><img src="${away.logo}"><span>${away.name}</span></div>
+                            </div>`;
+                    });
+                } else {
+                    // Falls keine Live-Spiele, laden wir die regulären Spiele des aktuellen Spieltages
+                    loadDefaultFixtures();
+                }
+            } catch(e) {
+                container.innerHTML = "Fehler beim Laden der Spiele.";
+            }
+        }
+
+        async function loadDefaultFixtures() {
+            const container = document.getElementById("matchesList");
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=${season}&round=Regular Season - 1`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                if(data.response && data.response.length > 0) {
+                    container.innerHTML = "";
+                    data.response.forEach(m => {
+                        const home = m.teams.home;
+                        const away = m.teams.away;
+                        container.innerHTML += `
+                            <div class="match-item">
+                                <div class="team home"><span>${home.name}</span><img src="${home.logo}"></div>
+                                <div class="score-box"><div class="score">${m.goals.home ?? -} : ${m.goals.away ?? -}</div></div>
+                                <div class="team"><img src="${away.logo}"><span>${away.name}</span></div>
+                            </div>`;
+                    });
+                }
+            } catch(e) {
+                container.innerHTML = "Keine Spiele gefunden.";
+            }
+        }
+
+        async function loadTable() {
+            const container = document.getElementById("tableContainer");
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/standings?league=${leagueId}&season=${season}`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                
+                if(data.response && data.response.length > 0) {
+                    const standings = data.response[0].league.standings[0];
+                    let html = `<table><tr><th>#</th><th>Team</th><th class="center">Sp</th><th class="right">Pkt</th></tr>`;
+                    standings.forEach(s => {
+                        html += `<tr>
+                            <td>${s.rank}</td>
+                            <td><div class="table-team"><img src="${s.team.logo}"><span>${s.team.name}</span></div></td>
+                            <td class="center">${s.all.played}</td>
+                            <td class="right"><b>${s.points}</b></td>
+                        </tr>`;
+                    });
+                    html += `</table>`;
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = "Tabelle nicht verfügbar.";
+                }
+            } catch(e) {
+                container.innerHTML = "Fehler beim Laden der Tabelle.";
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
