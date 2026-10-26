@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1. Bundesliga Pro Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #070d1a;
+            --card-bg: #0f1115;
+            --card-hover: #161b22;
+            --accent-color: #00ff87;
+            --text-main: #ffffff;
+            --text-muted: #8b949e;
+            --border-color: #30363d;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 25px; }
+        h1 { font-size: 2.2rem; color: var(--accent-color); margin-bottom: 5px; }
+        .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+        
+        .status-box { background: #161b22; border: 1px solid var(--accent-color); padding: 10px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; }
+        
+        .controls { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 25px; background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); }
+        button, select { background: #21262d; color: var(--text-main); border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; transition: background 0.2s; }
+        button:hover, select:hover { background: #30363d; }
+        select { padding-right: 30px; }
+
+        .grid { display: grid; grid-template-columns: 1.6fr 1.4fr; gap: 20px; }
+        @media(max-width: 950px) { .grid { grid-template-columns: 1fr; } }
+        
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        h2 { font-size: 1.2rem; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; color: var(--accent-color); }
+        
+        .match-item { display: flex; justify-content: space-between; align-items: center; padding: 14px 10px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; cursor: pointer; transition: background 0.15s; border-radius: 6px; }
+        .match-item:hover { background: var(--card-hover); }
+        .match-item:last-child { border-bottom: none; }
+        
+        .team { display: flex; align-items: center; gap: 10px; width: 38%; }
+        .team.home { justify-content: flex-end; text-align: right; }
+        .team img { width: 24px; height: 24px; object-fit: contain; }
+        
+        .score-box { text-align: center; width: 24%; }
+        .score { font-weight: bold; background: #21262d; padding: 4px 12px; border-radius: 6px; display: inline-block; min-width: 60px; }
+        .match-date { font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 3px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { color: var(--text-muted); font-weight: 600; }
+        td.center, th.center { text-align: center; }
+        td.right, th.right { text-align: right; }
+        .table-team { display: flex; align-items: center; gap: 6px; }
+        .table-team img { width: 18px; height: 18px; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
+        .modal-content { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 25px; position: relative; }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; color: var(--text-muted); cursor: pointer; background: none; border: none; }
+        .modal-header { text-align: center; margin-bottom: 20px; }
+        .modal-teams { display: flex; justify-content: space-around; align-items: center; font-size: 1.1rem; font-weight: bold; margin-bottom: 8px; }
+        .modal-teams img { width: 35px; height: 35px; object-fit: contain; }
+        
+        .event-item { display: flex; align-items: center; justify-content: space-between; font-size: 0.9rem; padding: 8px 10px; border-bottom: 1px solid var(--border-color); color: var(--text-main); background: #161b22; margin-bottom: 6px; border-radius: 6px; }
+        .event-time { font-weight: bold; color: var(--accent-color); min-width: 40px; }
+        .event-score { background: #21262d; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>1. Bundesliga Pro Dashboard</h1>
+            <div class="subtitle">Spieltage, Tabelle & Torschützen (Saison 2024/2025)</div>
+        </header>
+
+        <div id="apiStatusBanner" class="status-box">
+            <span>Verbinde mit API...</span>
+        </div>
+
+        <div class="controls">
+            <button onclick="changeMatchday(-1)">◄ Vorheriger</button>
+            <select id="matchdaySelect" onchange="loadMatchday(this.value)"></select>
+            <button onclick="changeMatchday(1)">Nächster ►</button>
+        </div>
+
+        <div class="grid">
+            <div>
+                <div class="card">
+                    <h2 id="matchdayTitle">Spieltag</h2>
+                    <div id="matchesList">Lade Begegnungen...</div>
+                </div>
+            </div>
+            <div>
+                <div class="card">
+                    <h2>Tabelle</h2>
+                    <div id="tableContainer">Lade Tabelle...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal für Tore & Ereignisse -->
+    <div id="matchModal" class="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+            <div class="modal-header">
+                <div class="modal-teams" id="modalTeamsHeader"></div>
+                <div id="modalStatus" style="color: var(--text-muted); font-size: 0.85rem;"></div>
+            </div>
+            <div style="margin-top: 15px;">
+                <h3 style="font-size: 1rem; color: var(--accent-color); margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">Tore & Spielstandverlauf</h3>
+                <div id="modalEvents">Klicke auf ein Spiel, um Details zu laden...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = "297322363f3bf16e1304cfb933a0c8d5";
+        const leagueId = 78;
+        const season = "2024";
+        let currentMatchday = "";
+
+        async function init() {
+            await checkApiStatus();
+            await loadRounds();
+            loadTable();
+        }
+
+        async function checkApiStatus() {
+            const banner = document.getElementById("apiStatusBanner");
+            try {
+                const res = await fetch("https://v3.football.api-sports.io/status", {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                if(data.response && data.response.account) {
+                    const acc = data.response.account;
+                    banner.innerHTML = `<span>🟢 Verbunden (${acc.firstname})</span><span>Anfragen heute: <b>${data.response.requests.current} / ${data.response.requests.limit_day}</b></span>`;
+                }
+            } catch(e) {
+                banner.innerHTML = `<span style="color:#ff3333;">❌ Verbindungsfehler</span>`;
+            }
+        }
+
+        async function loadRounds() {
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/fixtures/rounds?league=${leagueId}&season=${season}`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                const select = document.getElementById("matchdaySelect");
+                select.innerHTML = "";
+                
+                if(data.response && data.response.length > 0) {
+                    data.response.forEach((round, index) => {
+                        const opt = document.createElement("option");
+                        opt.value = round;
+                        opt.textContent = round.replace("Regular Season - ", "Spieltag ");
+                        select.appendChild(opt);
+                        if(index === 0) currentMatchday = round;
+                    });
+                    select.value = currentMatchday;
+                    loadMatchday(currentMatchday);
+                }
+            } catch (e) {
+                console.error("Fehler beim Laden der Spieltage", e);
+            }
+        }
+
+        async function loadMatchday(round) {
+            currentMatchday = round;
+            document.getElementById("matchdayTitle").textContent = round.replace("Regular Season - ", "Spieltag ");
+            const container = document.getElementById("matchesList");
+            container.innerHTML = "Lade Spiele...";
+
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=${season}&round=${round}`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                
+                if(data.response && data.response.length > 0) {
+                    container.innerHTML = "";
+                    data.response.forEach(m => {
+                        const home = m.teams.home;
+                        const away = m.teams.away;
+                        const goalsHome = m.goals.home !== null ? m.goals.home : "-";
+                        const goalsAway = m.goals.away !== null ? m.goals.away : "-";
+                        const dateObj = new Date(m.fixture.date);
+                        const dateFormatted = dateObj.toLocaleDateString("de-DE", { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+                        const div = document.createElement("div");
+                        div.className = "match-item";
+                        div.onclick = () => openMatchDetails(m.fixture.id);
+                        div.innerHTML = `
+                            <div class="team home"><span>${home.name}</span><img src="${home.logo}"></div>
+                            <div class="score-box">
+                                <div class="score">${goalsHome} : ${goalsAway}</div>
+                                <span class="match-date">${dateFormatted}</span>
+                            </div>
+                            <div class="team"><img src="${away.logo}"><span>${away.name}</span></div>
+                        `;
+                        container.appendChild(div);
+                    });
+                } else {
+                    container.innerHTML = "Keine Spiele gefunden.";
+                }
+            } catch(e) {
+                container.innerHTML = "Fehler beim Laden der Spiele.";
+            }
+        }
+
+        async function openMatchDetails(fixtureId) {
+            const modal = document.getElementById("matchModal");
+            modal.style.display = "flex";
+            document.getElementById("modalTeamsHeader").innerHTML = "Lade Spieldetails...";
+            document.getElementById("modalEvents").innerHTML = "Lade Tore...";
+            document.getElementById("modalStatus").textContent = "";
+
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                if(data.response && data.response.length > 0) {
+                    const match = data.response[0];
+                    const home = match.teams.home;
+                    const away = match.teams.away;
+
+                    document.getElementById("modalTeamsHeader").innerHTML = `
+                        <div style="display:flex; align-items:center; gap:8px;"><img src="${home.logo}">${home.name}</div>
+                        <div style="background:#21262d; padding:4px 12px; border-radius:6px;">${match.goals.home ?? 0} : ${match.goals.away ?? 0}</div>
+                        <div style="display:flex; align-items:center; gap:8px;"><img src="${away.logo}">${away.name}</div>
+                    `;
+                    document.getElementById("modalStatus").textContent = `Status: ${match.fixture.status.long}`;
+
+                    let evHtml = "";
+                    if (match.events && match.events.length > 0) {
+                        let hGoals = 0;
+                        let aGoals = 0;
+
+                        match.events.forEach(ev => {
+                            if (ev.type === 'Goal') {
+                                // Zähle Tore für den jeweiligen Spielstand beim Tor
+                                if (ev.team.id === home.id) {
+                                    hGoals++;
+                                } else {
+                                    aGoals++;
+                                }
+
+                                let playerName = ev.player && ev.player.name ? ev.player.name : "Tor";
+                                let goalType = "";
+                                if (ev.detail === 'Own Goal') goalType = ' (Eigentor)';
+                                if (ev.detail === 'Penalty') goalType = ' (Elfmeter)';
+
+                                evHtml += `
+                                    <div class="event-item">
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <span class="event-time">${ev.time.elapsed}'</span>
+                                            <span>⚽ <b>${playerName}</b> <span style="color:var(--text-muted); font-size:0.8rem;">(${ev.team.name})${goalType}</span></span>
+                                        </div>
+                                        <span class="event-score">${hGoals}:${aGoals}</span>
+                                    </div>
+                                `;
+                            } else if (ev.type === 'Card') {
+                                let cardIcon = ev.detail === 'Red Card' ? '🟥' : '🟨';
+                                let playerName = ev.player && ev.player.name ? ev.player.name : "";
+                                evHtml += `
+                                    <div class="event-item" style="opacity: 0.7;">
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <span class="event-time">${ev.time.elapsed}'</span>
+                                            <span>${cardIcon} ${playerName} <span style="color:var(--text-muted); font-size:0.8rem;">(${ev.team.name})</span></span>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        });
+                    }
+
+                    if (evHtml === "") {
+                        evHtml = "<div style='color:var(--text-muted); text-align:center; padding: 15px;'>Keine Tore oder Karten für dieses Spiel hinterlegt.</div>";
+                    }
+                    document.getElementById("modalEvents").innerHTML = evHtml;
+                }
+            } catch(e) {
+                document.getElementById("modalEvents").innerHTML = "Fehler beim Laden der Spieldetails.";
+            }
+        }
+
+        function closeModal() {
+            document.getElementById("matchModal").style.display = "none";
+        }
+
+        function changeMatchday(direction) {
+            const select = document.getElementById("matchdaySelect");
+            const index = select.selectedIndex;
+            if(index + direction >= 0 && index + direction < select.options.length) {
+                select.selectedIndex = index + direction;
+                loadMatchday(select.value);
+            }
+        }
+
+        async function loadTable() {
+            const container = document.getElementById("tableContainer");
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/standings?league=${leagueId}&season=${season}`, {
+                    headers: { "x-apisports-key": apiKey }
+                });
+                const data = await res.json();
+                
+                if(data.response && data.response.length > 0) {
+                    const standings = data.response[0].league.standings[0];
+                    let html = `<table><tr><th>#</th><th>Team</th><th class="center">Sp</th><th class="center">Tore</th><th class="right">Pkt</th></tr>`;
+                    
+                    standings.forEach(s => {
+                        html += `<tr>
+                            <td><b>${s.rank}</b></td>
+                            <td><div class="table-team"><img src="${s.team.logo}"><span>${s.team.name}</span></div></td>
+                            <td class="center">${s.all.played}</td>
+                            <td class="center">${s.all.goals.for}:${s.all.goals.against}</td>
+                            <td class="right"><b>${s.points}</b></td>
+                        </tr>`;
+                    });
+                    html += `</table>`;
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = "Tabelle nicht verfügbar.";
+                }
+            } catch(e) {
+                container.innerHTML = "Fehler beim Laden der Tabelle.";
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
